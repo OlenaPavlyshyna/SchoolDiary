@@ -62,12 +62,7 @@ struct HomeworkView: View {
                             changeStatus(homework)
                         }
                         .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                modelContext.delete(homework)
-                                try? modelContext.save()
-                            } label: {
-                                Label("Видалити", systemImage: "trash")
-                            }
+                            deleteHomework(homework)
                             
                             Button {
                                 editingHomework = homework
@@ -97,6 +92,15 @@ struct HomeworkView: View {
             )
         }
         .tint(homework.status == .completed ? .orange : .green)
+    }
+    
+    func deleteHomework(_ homework: Homework) -> some View {
+        Button(role: .destructive) {
+            modelContext.delete(homework)
+            try? modelContext.save()
+        } label: {
+            Label("Видалити", systemImage: "trash")
+        }
     }
     
     private func toggleStatus(for homework: Homework) {
