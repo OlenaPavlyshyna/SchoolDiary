@@ -12,6 +12,7 @@ struct HomeworkEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Subject.name)]) private var subjects: [Subject]
+    @Query(sort: [SortDescriptor(\ScheduleLesson.weekdayRawValue), SortDescriptor(\ScheduleLesson.order)]) private var lessons: [ScheduleLesson]
 
     let homework: Homework?
     let lesson: ScheduleLesson?
@@ -24,6 +25,7 @@ struct HomeworkEditorView: View {
     @State private var hasDueDate: Bool
     @State private var dueDate: Date
     @State private var status: HomeworkStatus
+    @State private var isDueDateCalendarExpanded: Bool
 
     private var trimmedSubjectName: String {
         newSubjectName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,6 +48,61 @@ struct HomeworkEditorView: View {
         return hasSubject && !trimmedTaskDescription.isEmpty
     }
 
+    private var selectedSubject: Subject? {
+        switch subjectMode {
+        case .existing:
+            guard let selectedSubjectID else {
+                return nil
+            }
+
+            if let subject = subjects.first(where: { $0.persistentModelID == selectedSubjectID }) {
+                return subject
+            }
+
+            if let lessonSubject = lesson?.subject, lessonSubject.persistentModelID == selectedSubjectID {
+                return lessonSubject
+            }
+
+            return nil
+        case .new:
+            guard !trimmedSubjectName.isEmpty else {
+                return nil
+            }
+
+            return subjects.first { $0.name.localizedCaseInsensitiveCompare(trimmedSubjectName) == .orderedSame }
+        }
+    }
+
+    private var scheduleLookupName: String? {
+        switch subjectMode {
+        case .existing:
+            return selectedSubject?.name
+        case .new:
+            return trimmedSubjectName.isEmpty ? nil : trimmedSubjectName
+        }
+    }
+
+    private var scheduledWeekdaysForSelectedSubject: Set<Weekday> {
+        let selectedSubjectID = selectedSubject?.persistentModelID
+        let selectedSubjectName = scheduleLookupName
+
+        return Set(lessons.compactMap { lesson in
+            if let selectedSubjectID, lesson.subject?.persistentModelID == selectedSubjectID {
+                return lesson.weekday
+            }
+
+            guard let selectedSubjectName else {
+                return nil
+            }
+
+            return lesson.displaySubjectName.localizedCaseInsensitiveCompare(selectedSubjectName) == .orderedSame ? lesson.weekday : nil
+        })
+    }
+
+    private var dueDateAccentColorHex: String {
+        selectedSubject?.colorHex ?? selectedColorHex
+    }
+
     init(homework: Homework? = nil, lesson: ScheduleLesson? = nil) {
         self.homework = homework
         self.lesson = lesson
@@ -59,8 +116,10 @@ struct HomeworkEditorView: View {
         _selectedColorHex = State(initialValue: homework?.displayColorHex ?? lesson?.displayColorHex ?? SubjectPalette.fallbackHex)
         _taskDescription = State(initialValue: homework?.taskDescription ?? "")
         _hasDueDate = State(initialValue: homework?.dueDate != nil)
+        let startsWithDueDate = homework?.dueDate != nil
         _dueDate = State(initialValue: homework?.dueDate ?? Date())
         _status = State(initialValue: homework?.status ?? .active)
+        _isDueDateCalendarExpanded = State(initialValue: startsWithDueDate)
     }
 
     var body: some View {
@@ -89,14 +148,27 @@ struct HomeworkEditorView: View {
                 }
 
                 Section("Завдання") {
-                    TextEditor(text: $taskDescription)
-                        .frame(minHeight: 110)
-
                     Toggle("Є термін виконання", isOn: $hasDueDate)
 
                     if hasDueDate {
-                        DatePicker("Дата", selection: $dueDate, displayedComponents: .date)
+                        DisclosureGroup(isExpanded: $isDueDateCalendarExpanded) {
+                            SubjectDueDateCalendarView(
+                                selection: $dueDate,
+                                highlightedWeekdays: scheduledWeekdaysForSelectedSubject,
+                                accentColorHex: dueDateAccentColorHex,
+                                highlightedSubjectName: scheduleLookupName
+                            ) {
+                                withAnimation {
+                                    isDueDateCalendarExpanded = false
+                                }
+                            }
+                        } label: {
+                            LabeledContent("Дата", value: dueDate.schoolDiaryShortDate)
+                        }
                     }
+
+                    TextEditor(text: $taskDescription)
+                        .frame(minHeight: 110)
 
                     Picker("Статус", selection: $status) {
                         ForEach(HomeworkStatus.allCases) { status in
@@ -106,6 +178,9 @@ struct HomeworkEditorView: View {
                 }
             }
             .navigationTitle(homework == nil ? "Нове завдання" : "Редагувати завдання")
+            .onChange(of: hasDueDate) { _, enabled in
+                isDueDateCalendarExpanded = enabled
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Скасувати") {
