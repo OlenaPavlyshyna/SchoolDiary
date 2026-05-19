@@ -63,13 +63,7 @@ struct HomeworkView: View {
                         }
                         .swipeActions(edge: .trailing) {
                             deleteHomework(homework)
-                            
-                            Button {
-                                editingHomework = homework
-                            } label: {
-                                Label("Редагувати", systemImage: "pencil")
-                            }
-                            .tint(.blue)
+                            editHomework(homework)
                         }
                     }
                     .onDelete { offsets in
@@ -101,6 +95,15 @@ struct HomeworkView: View {
         } label: {
             Label("Видалити", systemImage: "trash")
         }
+    }
+    
+    func editHomework(_ homework: Homework) -> some View {
+        Button {
+            editingHomework = homework
+        } label: {
+            Label("Редагувати", systemImage: "pencil")
+        }
+        .tint(.blue)
     }
     
     private func toggleStatus(for homework: Homework) {
