@@ -32,6 +32,3 @@ playground.xcworkspace
 .env
 .env.*
 !.env.example
-
-AGENTS.md
-Journal.md
